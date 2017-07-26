@@ -15,41 +15,43 @@ namespace CQJSSmart
     {
         public ILiveIsinStatus Status = new ILiveIsinStatus();
 
-        public ComPort comIsin;
-        int addr = 0;
-        public ILiveIsinRelay(int addr, ComPort com)
-            : this(com)
+        private int addr = 0;
+        INetPortDevice port = null;
+        public ILiveIsinRelay(INetPortDevice port)
+        {
+            try
+            {
+                this.port = port;
+            }
+            catch (Exception ex)
+            {
+                ILiveDebug.Instance.WriteLine(ex.Message);
+            }
+        }
+        public ILiveIsinRelay(int addr, INetPortDevice port):this(port)
         {
             this.addr = addr;
+
         }
 
-        public ILiveIsinRelay(ComPort com)
+        ComPort comport = null;
+        public ILiveIsinRelay(ComPort port)
         {
-            #region 注册串口
-            comIsin = com;
-            comIsin.SerialDataReceived += new ComPortDataReceivedEvent(comIsin_SerialDataReceived);
-            if (!comIsin.Registered)
+            try
             {
-                if (comIsin.Register() != eDeviceRegistrationUnRegistrationResponse.Success)
-                    ErrorLog.Error("COM Port couldn't be registered. Cause: {0}", comIsin.DeviceRegistrationFailureReason);
-                if (comIsin.Registered)
-                    comIsin.SetComPortSpec(ComPort.eComBaudRates.ComspecBaudRate9600,
-                                                                     ComPort.eComDataBits.ComspecDataBits8,
-                                                                     ComPort.eComParityType.ComspecParityNone,
-                                                                     ComPort.eComStopBits.ComspecStopBits1,
-                                         ComPort.eComProtocolType.ComspecProtocolRS485,
-                                         ComPort.eComHardwareHandshakeType.ComspecHardwareHandshakeNone,
-                                         ComPort.eComSoftwareHandshakeType.ComspecSoftwareHandshakeNone,
-                                         false);
+                this.comport = port;
             }
-            #endregion
+            catch (Exception ex)
+            {
+                ILiveDebug.Instance.WriteLine(ex.Message);
+            }
         }
-        void comIsin_SerialDataReceived(ComPort ReceivingComPort, ComPortSerialDataEventArgs args)
+        public ILiveIsinRelay(int addr, ComPort port)
+            : this(port)
         {
-            byte[] sendBytes = Encoding.GetEncoding(28591).GetBytes(args.SerialData);
-         //   ILiveDebug.Instance.WriteLine(this.addr+"IsinReceived" + BitConverter.ToString(sendBytes, 0, sendBytes.Length));
-        }
+            this.addr = addr;
 
+        }
 
         public void RelayOpen()
         {
@@ -122,15 +124,15 @@ namespace CQJSSmart
             byte[] checkarr2 = BitConverter.GetBytes(address + port1 + port2 + 161);
             // this.ConvertIntToByteArray(address + port1 + port1 + 161, ref checkarr2);
 
-            byte[] sendBytes = new byte[] { 0xB2, 0x00, (byte)address, 0xA1, (byte)port1, (byte)port2, 0x00, checkarr2[1], checkarr2[0], 0x2B };
+            byte[] sendBytes = new byte[] { 0xB2, (byte)address, 0xA1, (byte)port1, (byte)port2, 0x00, checkarr2[0], 0x2B };
             if (states)
             {
-                sendBytes = new byte[] { 0xB2, 0x00, (byte)address, 0xA1, (byte)port1, (byte)port2, 0x01, checkarr1[1], checkarr1[0], 0x2B };
+                sendBytes = new byte[] { 0xB2, (byte)address, 0xA1, (byte)port1, (byte)port2, 0x01, checkarr1[0], 0x2B };
             }
-
+            ILiveDebug.Instance.WriteLine("Relay:" + ILiveUtil.ToHexString(sendBytes));
             string cmd = Encoding.GetEncoding(28591).GetString(sendBytes, 0, sendBytes.Length);
 
-            this.comIsin.Send(cmd);
+            this.port.Send(cmd);
             Thread.Sleep(500);
 
         }
@@ -143,39 +145,27 @@ namespace CQJSSmart
     {
         public ILiveIsinDimmerStatus Status = new ILiveIsinDimmerStatus();
 
-        public ComPort comIsin;
-        int addr = 0;
-        public ILiveIsinDimmer(int addr, ComPort com)
-            : this(com)
+                private int addr = 0;
+        INetPortDevice port = null;
+        public ILiveIsinDimmer(INetPortDevice port)
         {
-            this.addr = addr;
-        }
-
-        public ILiveIsinDimmer(ComPort com)
-        {
-            comIsin = com;
-            comIsin.SerialDataReceived += new ComPortDataReceivedEvent(comIsin_SerialDataReceived);
-            if (!comIsin.Registered)
+            try
             {
-                if (comIsin.Register() != eDeviceRegistrationUnRegistrationResponse.Success)
-                    ErrorLog.Error("COM Port couldn't be registered. Cause: {0}", comIsin.DeviceRegistrationFailureReason);
-                if (comIsin.Registered)
-                    comIsin.SetComPortSpec(ComPort.eComBaudRates.ComspecBaudRate9600,
-                                                                     ComPort.eComDataBits.ComspecDataBits8,
-                                                                     ComPort.eComParityType.ComspecParityNone,
-                                                                     ComPort.eComStopBits.ComspecStopBits1,
-                                         ComPort.eComProtocolType.ComspecProtocolRS485,
-                                         ComPort.eComHardwareHandshakeType.ComspecHardwareHandshakeNone,
-                                         ComPort.eComSoftwareHandshakeType.ComspecSoftwareHandshakeNone,
-                                         false);
+                this.port = port;
+            }
+            catch (Exception ex)
+            {
+                ILiveDebug.Instance.WriteLine(ex.Message);
             }
         }
-
-        void comIsin_SerialDataReceived(ComPort ReceivingComPort, ComPortSerialDataEventArgs args)
+        public ILiveIsinDimmer(int addr, INetPortDevice port)
+            : this(port)
         {
-            byte[] sendBytes = Encoding.GetEncoding(28591).GetBytes(args.SerialData);
-            //   ILiveDebug.Instance.WriteLine(this.addr+"IsinReceived" + BitConverter.ToString(sendBytes, 0, sendBytes.Length));
+            this.addr = addr;
+
         }
+
+
         #region 设置亮度
         /// <summary>
         /// 设置第一路调光亮度
@@ -184,11 +174,11 @@ namespace CQJSSmart
         public void SetDim1(int p)
         {
 
-            byte[] sendBytes = this.BuildCMD((byte)addr, 0xA2, 0x01, 0x00, 0x00);
-
+            byte[] sendBytes = this.BuildCMD((byte)addr, 0xA2, 0x01, 0x00, (byte)p);
+            ILiveDebug.Instance.WriteLine("DIM1"+ILiveUtil.ToHexString(sendBytes));
             string cmd = Encoding.GetEncoding(28591).GetString(sendBytes, 0, sendBytes.Length);
 
-            this.comIsin.Send(cmd);
+            this.port.Send(cmd);
             this.Status.Dim1 = p;
             Thread.Sleep(500);
         }
@@ -200,10 +190,10 @@ namespace CQJSSmart
         {
 
             byte[] sendBytes = this.BuildCMD((byte)addr, 0xA2, 0x02, 0x00, (byte)p);
-
+            ILiveDebug.Instance.WriteLine("DIM2" + ILiveUtil.ToHexString(sendBytes));
             string cmd = Encoding.GetEncoding(28591).GetString(sendBytes, 0, sendBytes.Length);
 
-            this.comIsin.Send(cmd);
+            this.port.Send(cmd);
             this.Status.Dim2 = p;
             Thread.Sleep(500);
         }
@@ -213,9 +203,11 @@ namespace CQJSSmart
         /// <param name="p">亮度 0-255</param>
         public void SetDim3(int p)
         {
-            byte[] sendBytes = this.BuildCMD((byte)addr, 0xA2, 0x01, 0x00, (byte)p);
+            byte[] sendBytes = this.BuildCMD((byte)addr, 0xA2, 0x04, 0x00, (byte)p);
             string cmd = Encoding.GetEncoding(28591).GetString(sendBytes, 0, sendBytes.Length);
-            this.comIsin.Send(cmd);
+            ILiveDebug.Instance.WriteLine("DIM3" + ILiveUtil.ToHexString(sendBytes));
+
+            this.port.Send(cmd);
             this.Status.Dim3 = p;
             Thread.Sleep(500);
         }
@@ -225,11 +217,12 @@ namespace CQJSSmart
         /// <param name="p">亮度 0-255</param>
         public void SetDim4(int p)
         {
-            byte[] sendBytes = this.BuildCMD((byte)addr, 0xA2, 0x01, 0x00, (byte)p);
+            byte[] sendBytes = this.BuildCMD((byte)addr, 0xA2, 0x08, 0x00, (byte)p);
+            ILiveDebug.Instance.WriteLine("DIM4" + ILiveUtil.ToHexString(sendBytes));
 
             string cmd = Encoding.GetEncoding(28591).GetString(sendBytes, 0, sendBytes.Length);
 
-            this.comIsin.Send(cmd);
+            this.port.Send(cmd);
             this.Status.Dim4 = p;
             Thread.Sleep(500);
         }
@@ -253,7 +246,7 @@ namespace CQJSSmart
             // this.ConvertIntToByteArray(address + port1 + port1 + 162, ref checkarr1);
             byte[] checkarr1 = BitConverter.GetBytes(addr + fun + port1+port2+p);
 
-            byte[] sendBytes = new byte[] { 0xB2, addr, fun, port1, port2, checkarr1[0], 0x2B };
+            byte[] sendBytes = new byte[] { 0xB2, addr, fun, port1, port2,p, checkarr1[0], 0x2B };
             return sendBytes;
         }
     }

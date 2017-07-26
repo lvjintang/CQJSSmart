@@ -15,122 +15,65 @@ namespace CQJSSmart
     /// </summary>
     public class ILiveTPC5
     {
-        TCPClient tcpClient = null;
-       
-
-        private ComPort com;
-
         public delegate void PTCIHandler(int id, int btnid);
 
         public event PTCIHandler PushTPCIEvent;
 
-        public ILiveTPC5(int port)
-        {
-            tcpClient = new TCPClient("192.168.188.25", 8004, 4096);
-            tcpClient.SocketStatusChange+=new TCPClientSocketStatusChangeEventHandler(tcpClient_SocketStatusChange);
-            this.Connect();
-
-        }
-        private void Connect()
+        INetPortDevice iserver = null;
+        public ILiveTPC5(INetPortDevice port)
         {
             try
             {
-                if (tcpClient.ClientStatus!=SocketStatus.SOCKET_STATUS_CONNECTED)
-                {
-                    SocketErrorCodes codes = tcpClient.ConnectToServer();
-                }
-                
+                this.iserver = port;
+                this.iserver.NetDataReceived += new NetDataReceivedEventHandler(iserver_NetDataReceived);
             }
             catch (Exception ex)
             {
-                //ILiveDebug.Instance.WriteLine("tpcdebug:" + ex.Message);
+                ILiveDebug.Instance.WriteLine(ex.Message);
             }
-
-            new Thread(tcpListenMethod, null, Thread.eThreadStartOptions.Running);
         }
 
-        void tcpClient_SocketStatusChange(TCPClient myTCPClient, SocketStatus clientSocketStatus)
+        void iserver_NetDataReceived(INetPortDevice device, NetPortSerialDataEventArgs args)
         {
-   
-            if (clientSocketStatus!=SocketStatus.SOCKET_STATUS_CONNECTED)
-            {
-                try
-                {
-                    myTCPClient.ConnectToServer();
-                    new Thread(tcpListenMethod, null, Thread.eThreadStartOptions.Running);
-                }
-                catch (Exception)
-                {
-                    
-                }
-           
-            }
-           
-            //throw new NotImplementedException();
+            OnDataReceived(args.SerialData);
+          //  throw new NotImplementedException();
         }
 
-        /// <summary>
-        /// 数据队列处理
-        /// </summary>
-        /// <param name="obj"></param>
-        /// <returns></returns>
-        internal object tcpListenMethod(object obj)
-        {
-            tcpClient.ReceiveDataAsync(this.Read);
-           
-            return null;
-        }
+    
 
-        public void Read(TCPClient myTCPClient, int numberOfBytesReceived)
+        private void Read(UDPServer myUDPServer, int numberOfBytesReceived)
         {
-            if (myTCPClient.ClientStatus != SocketStatus.SOCKET_STATUS_CONNECTED)
+            byte[] rbytes = new byte[numberOfBytesReceived];
+
+            if (numberOfBytesReceived > 0)
             {
 
-                return;
-            }
-            string messageReceived = string.Empty;
-          
-            try
-            {
+                //Array.Copy(myUDPServer.IncomingDataBuffer, rbytes, numberOfBytesReceived);
 
-                messageReceived = Encoding.GetEncoding(28591).GetString(myTCPClient.IncomingDataBuffer, 0, numberOfBytesReceived);
-               
+                string messageReceived = Encoding.GetEncoding(28591).GetString(myUDPServer.IncomingDataBuffer, 0, numberOfBytesReceived);
+
+
                 OnDataReceived(messageReceived);
-     
-                myTCPClient.ReceiveDataAsync(this.Read, 0);
-
+                // CrestronConsole.PrintLine("messageReceived:" + messageReceived);
 
             }
-            catch (Exception ex)
+            try
+            {
+                // CrestronConsole.PrintLine("Recv:" + ILiveUtil.ToHexString(rbytes));
+                SocketErrorCodes code = myUDPServer.ReceiveDataAsync(this.Read);
+                Thread.Sleep(300);
+            }
+            catch (Exception)
             {
 
-               // if (Disconnected != null)
-                 //   Disconnected(this, EventArgs.Empty);
-            }
-        }
 
-        public ILiveTPC5(ComPort com)
-        {
-            #region 注册串口
-            this.com = com;
-            com.SerialDataReceived += new ComPortDataReceivedEvent(ILiveTPC5_SerialDataReceived);
-            if (!com.Registered)
-            {
-                if (com.Register() != eDeviceRegistrationUnRegistrationResponse.Success)
-                    ErrorLog.Error("COM Port couldn't be registered. Cause: {0}", com.DeviceRegistrationFailureReason);
-                if (com.Registered)
-                    com.SetComPortSpec(ComPort.eComBaudRates.ComspecBaudRate9600,
-                                                                     ComPort.eComDataBits.ComspecDataBits8,
-                                                                     ComPort.eComParityType.ComspecParityNone,
-                                                                     ComPort.eComStopBits.ComspecStopBits1,
-                                         ComPort.eComProtocolType.ComspecProtocolRS232,
-                                         ComPort.eComHardwareHandshakeType.ComspecHardwareHandshakeNone,
-                                         ComPort.eComSoftwareHandshakeType.ComspecSoftwareHandshakeNone,
-                                         false);
             }
 
-            #endregion
+
         }
+
+
+
         List<byte> rdata = new List<byte>(6);
 
         void ILiveTPC5_SerialDataReceived(ComPort ReceivingComPort, ComPortSerialDataEventArgs args)
@@ -172,8 +115,8 @@ namespace CQJSSmart
                 rdata.Clear();
             }
             byte[] sendBytes = Encoding.ASCII.GetBytes(serialData);
-           // ILiveDebug.Instance.WriteLine("485Length:" + sendBytes.Length.ToString() + "data:" + ILiveUtil.ToHexString(sendBytes));
-           // ILiveDebug.Instance.WriteLine("TPCDebug:"+ILiveUtil.ToHexString(sendBytes));
+            // ILiveDebug.Instance.WriteLine("485Length:" + sendBytes.Length.ToString() + "data:" + ILiveUtil.ToHexString(sendBytes));
+             ILiveDebug.Instance.WriteLine("TPCDebug:"+ILiveUtil.ToHexString(sendBytes));
 
             try
             {
@@ -198,23 +141,22 @@ namespace CQJSSmart
         {
             try
             {
-                if (rdata.Count == 6 && rdata[0]==0x55&&rdata[1]==0x10)
+                if (rdata.Count == 6 && rdata[0] == 0x55 && rdata[5] == 0x0D)
                 {
 
-                    byte iChanIdx = rdata[2];
+                    byte iChanIdx = rdata[1];
 
-                    int h = rdata[3];
+                    int h = rdata[2];
 
-                    int l = rdata[4];
+                    int l = rdata[3];
 
-                    if (rdata[5] == 0x0D)
+                    // if (rdata[4] == 0x0D)//校验
                     {
-                        this.PushTPCIEvent(iChanIdx, (h*256) + l);
+                        this.PushTPCIEvent(iChanIdx, (h * 256) + l);
                     }
 
                 }
-                //ILiveDebug.Instance.WriteLine("queuecount" + rdata.Count);
-
+        
                 rdata.Clear();
 
             }
@@ -223,8 +165,8 @@ namespace CQJSSmart
                 ILiveDebug.Instance.WriteLine(ex.Message);
 
             }
- 
-          
+
+
         }
 
 

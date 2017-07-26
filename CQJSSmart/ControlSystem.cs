@@ -9,7 +9,7 @@ namespace CQJSSmart
 {
     public class ControlSystem : CrestronControlSystem
     {
-        ILiveSmartAPI logic = null;
+        ILiveRuntime logic = null;
 
         /// <summary>
         /// ControlSystem Constructor. Starting point for the SIMPL#Pro program.
@@ -60,7 +60,7 @@ namespace CQJSSmart
             try
             {
                 //³õÊ¼»¯Âß¼­
-                logic = new ILiveSmartAPI(this);
+                logic = new ILiveRuntime(this);
                 logic.StartServices();
             }
             catch (Exception e)
